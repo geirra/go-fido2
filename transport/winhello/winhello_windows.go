@@ -11,10 +11,10 @@ import (
 	"unsafe"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/google/uuid"
-	"github.com/ldclabs/cose/key"
 	"github.com/geirra/go-fido2/protocol/ctap2"
 	"github.com/geirra/go-fido2/protocol/webauthn"
+	"github.com/google/uuid"
+	"github.com/ldclabs/cose/key"
 )
 
 // DevicePath is the virtual path used to identify the Windows Hello authenticator.
@@ -117,17 +117,17 @@ type _webauthnCredential struct {
 //	[4 trailing pad]
 //	Total: 64 bytes
 type _webauthnMakeCredentialOptionsV1 struct {
-	cbSize                           uint32  // offset  0
-	dwTimeoutMilliseconds            uint32  // offset  4
-	cCredentials                     uint32  // offset  8   (CredentialList.cCredentials)
-	pCredentials                     uintptr // offset 16   (CredentialList.pCredentials; 4 pad at 12)
-	cExtensions                      uint32  // offset 24   (Extensions.cExtensions)
-	pExtensions                      uintptr // offset 32   (Extensions.pExtensions; 4 pad at 28)
-	dwAuthenticatorAttachment        uint32  // offset 40
-	bRequireResidentKey              int32   // offset 44
-	dwUserVerificationRequirement    uint32  // offset 48
-	dwAttestationConveyancePreference uint32 // offset 52
-	dwFlags                          uint32  // offset 56
+	cbSize                            uint32  // offset  0
+	dwTimeoutMilliseconds             uint32  // offset  4
+	cCredentials                      uint32  // offset  8   (CredentialList.cCredentials)
+	pCredentials                      uintptr // offset 16   (CredentialList.pCredentials; 4 pad at 12)
+	cExtensions                       uint32  // offset 24   (Extensions.cExtensions)
+	pExtensions                       uintptr // offset 32   (Extensions.pExtensions; 4 pad at 28)
+	dwAuthenticatorAttachment         uint32  // offset 40
+	bRequireResidentKey               int32   // offset 44
+	dwUserVerificationRequirement     uint32  // offset 48
+	dwAttestationConveyancePreference uint32  // offset 52
+	dwFlags                           uint32  // offset 56
 	// 4 bytes trailing pad → struct size = 64
 }
 
@@ -171,9 +171,9 @@ type _webauthnAssertion struct {
 	cbSignature         uint32  // offset 16
 	pbSignature         uintptr // offset 24   (4 pad at 20)
 	// WEBAUTHN_CREDENTIAL inline:
-	credCbSize  uint32  // offset 32
-	credCbId    uint32  // offset 36
-	credPbId    uintptr // offset 40   (no pad needed: 40 is 8-aligned)
+	credCbSize   uint32  // offset 32
+	credCbId     uint32  // offset 36
+	credPbId     uintptr // offset 40   (no pad needed: 40 is 8-aligned)
 	credPwszType uintptr // offset 48
 	// user info:
 	cbUserId uint32  // offset 56
@@ -222,14 +222,40 @@ const (
 var (
 	_webauthnDLL = syscall.NewLazyDLL("webauthn.dll")
 
-	_procGetApiVersion     = _webauthnDLL.NewProc("WebAuthNGetApiVersionNumber")
-	_procIsPlatformAvail   = _webauthnDLL.NewProc("WebAuthNIsUserVerifyingPlatformAuthenticatorAvailable")
-	_procMakeCredential    = _webauthnDLL.NewProc("WebAuthNAuthenticatorMakeCredential")
-	_procGetAssertion      = _webauthnDLL.NewProc("WebAuthNAuthenticatorGetAssertion")
-	_procFreeAttestation   = _webauthnDLL.NewProc("WebAuthNFreeCredentialAttestation")
-	_procFreeAssertion     = _webauthnDLL.NewProc("WebAuthNFreeAssertion")
-	_procGetErrorName      = _webauthnDLL.NewProc("WebAuthNGetErrorName")
+	_procGetApiVersion   = _webauthnDLL.NewProc("WebAuthNGetApiVersionNumber")
+	_procIsPlatformAvail = _webauthnDLL.NewProc("WebAuthNIsUserVerifyingPlatformAuthenticatorAvailable")
+	_procMakeCredential  = _webauthnDLL.NewProc("WebAuthNAuthenticatorMakeCredential")
+	_procGetAssertion    = _webauthnDLL.NewProc("WebAuthNAuthenticatorGetAssertion")
+	_procFreeAttestation = _webauthnDLL.NewProc("WebAuthNFreeCredentialAttestation")
+	_procFreeAssertion   = _webauthnDLL.NewProc("WebAuthNFreeAssertion")
+	_procGetErrorName    = _webauthnDLL.NewProc("WebAuthNGetErrorName")
+
+	// Window handle helpers – same approach as libfido2/winhello.c.
+	_kernel32          = syscall.NewLazyDLL("kernel32.dll")
+	_user32            = syscall.NewLazyDLL("user32.dll")
+	_procGetConsoleWnd = _kernel32.NewProc("GetConsoleWindow")
+	_procGetForeground = _user32.NewProc("GetForegroundWindow")
+	_procGetDesktop    = _user32.NewProc("GetDesktopWindow")
 )
+
+// resolveHWND returns a suitable parent HWND for webauthn.dll dialogs.
+// Passing NULL to webauthn.dll works on some systems, but console applications
+// and services can receive NTE_NOT_SUPPORTED (0x80090027) because the DLL
+// cannot create a top-level window without a desktop context.
+// libfido2 applies the same fallback chain in winhello.c.
+func resolveHWND(hwnd uintptr) uintptr {
+	if hwnd != 0 {
+		return hwnd
+	}
+	if wnd, _, _ := _procGetConsoleWnd.Call(); wnd != 0 {
+		return wnd
+	}
+	if wnd, _, _ := _procGetForeground.Call(); wnd != 0 {
+		return wnd
+	}
+	wnd, _, _ := _procGetDesktop.Call()
+	return wnd
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -419,7 +445,7 @@ func (c *Client) MakeCredential(
 	// --- Call WebAuthNAuthenticatorMakeCredential ---
 	var pAttestation uintptr
 	hr, _, _ := _procMakeCredential.Call(
-		c.hwnd,
+		resolveHWND(c.hwnd),
 		uintptr(unsafe.Pointer(&rpInfo)),
 		uintptr(unsafe.Pointer(&userInfo)),
 		uintptr(unsafe.Pointer(&pubKeyParams)),
@@ -544,7 +570,7 @@ func (c *Client) getAssertion(
 	// --- Call WebAuthNAuthenticatorGetAssertion ---
 	var pAssertion uintptr
 	hr, _, _ := _procGetAssertion.Call(
-		c.hwnd,
+		resolveHWND(c.hwnd),
 		uintptr(unsafe.Pointer(rpIDW)),
 		uintptr(unsafe.Pointer(&cd)),
 		uintptr(unsafe.Pointer(&opts)),

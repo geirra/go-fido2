@@ -1,4 +1,4 @@
-module github.com/mohammadv184/go-fido2
+module github.com/geirra/go-fido2
 
 go 1.25.0
 

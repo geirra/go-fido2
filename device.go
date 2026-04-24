@@ -13,11 +13,11 @@ import (
 	"sync"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/geirra/go-fido2/protocol/ctap2"
+	"github.com/geirra/go-fido2/protocol/ctaphid"
+	"github.com/geirra/go-fido2/protocol/webauthn"
+	"github.com/geirra/go-fido2/transport/hid"
 	"github.com/ldclabs/cose/key"
-	"github.com/mohammadv184/go-fido2/protocol/ctap2"
-	"github.com/mohammadv184/go-fido2/protocol/ctaphid"
-	"github.com/mohammadv184/go-fido2/protocol/webauthn"
-	"github.com/mohammadv184/go-fido2/transport/hid"
 )
 
 // Device represents a FIDO2 device.
@@ -68,6 +68,8 @@ func Enumerate() ([]DeviceDescriptor, error) {
 		})
 	}
 
+	devDescs = append(devDescs, winHelloDescriptors()...)
+
 	return devDescs, nil
 }
 
@@ -78,6 +80,10 @@ func Open(descriptor DeviceDescriptor) (*Device, error) {
 
 // OpenPath opens a FIDO2 device by its platform-specific path.
 func OpenPath(path string) (*Device, error) {
+	if dev, err := openWinHelloPath(path); dev != nil || err != nil {
+		return dev, err
+	}
+
 	hidDev, err := hid.Get(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device: %w", err)

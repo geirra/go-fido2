@@ -9,7 +9,7 @@ import (
 	"io"
 	"slices"
 
-	"github.com/mohammadv184/go-fido2/transport/hid"
+	"github.com/geirra/go-fido2/transport/hid"
 )
 
 // Message is a sequence of packets that form a complete CTAPHID message.

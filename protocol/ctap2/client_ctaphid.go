@@ -10,10 +10,10 @@ import (
 	"slices"
 
 	"github.com/fxamacker/cbor/v2"
-	"github.com/mohammadv184/go-fido2/protocol/ctaphid"
+	"github.com/geirra/go-fido2/protocol/ctaphid"
 
 	"github.com/ldclabs/cose/key"
-	"github.com/mohammadv184/go-fido2/protocol/webauthn"
+	"github.com/geirra/go-fido2/protocol/webauthn"
 )
 
 // CTAPHIDClient implements the Client interface using CTAPHID.

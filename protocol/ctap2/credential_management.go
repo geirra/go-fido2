@@ -2,7 +2,7 @@ package ctap2
 
 import (
 	"github.com/ldclabs/cose/key"
-	"github.com/mohammadv184/go-fido2/protocol/webauthn"
+	"github.com/geirra/go-fido2/protocol/webauthn"
 )
 
 // AuthenticatorCredentialManagementRequest represents the request for AuthenticatorCredentialManagement command.

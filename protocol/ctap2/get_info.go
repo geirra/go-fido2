@@ -2,7 +2,7 @@ package ctap2
 
 import (
 	"github.com/google/uuid"
-	"github.com/mohammadv184/go-fido2/protocol/webauthn"
+	"github.com/geirra/go-fido2/protocol/webauthn"
 )
 
 // Version represents the CTAP protocol version.

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/mohammadv184/go-fido2/transport/hid"
+	"github.com/geirra/go-fido2/transport/hid"
 )
 
 // Errors returned by the CTAPHID protocol.

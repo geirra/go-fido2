@@ -5,7 +5,7 @@ import (
 	"iter"
 
 	"github.com/ldclabs/cose/key"
-	"github.com/mohammadv184/go-fido2/protocol/webauthn"
+	"github.com/geirra/go-fido2/protocol/webauthn"
 )
 
 // Client is the interface for CTAP2 client operations.

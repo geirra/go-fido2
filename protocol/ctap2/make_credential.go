@@ -5,7 +5,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/ldclabs/cose/key"
-	"github.com/mohammadv184/go-fido2/protocol/webauthn"
+	"github.com/geirra/go-fido2/protocol/webauthn"
 )
 
 // AuthenticatorMakeCredentialRequest represents the request for AuthenticatorMakeCredential command.

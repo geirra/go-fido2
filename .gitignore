@@ -14,3 +14,8 @@
 
 
 dist/
+
+# fidocheck diagnostic binaries
+fidocheck
+fidocheck.exe
+_fidocheck

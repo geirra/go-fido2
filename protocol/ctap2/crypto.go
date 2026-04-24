@@ -16,8 +16,8 @@ import (
 	"github.com/ldclabs/cose/iana"
 	"github.com/ldclabs/cose/key"
 	ecdh2 "github.com/ldclabs/cose/key/ecdh"
-	"github.com/mohammadv184/go-fido2/protocol/ctap2/pin/protocolone"
-	"github.com/mohammadv184/go-fido2/protocol/ctap2/pin/protocoltwo"
+	"github.com/geirra/go-fido2/protocol/ctap2/pin/protocolone"
+	"github.com/geirra/go-fido2/protocol/ctap2/pin/protocoltwo"
 )
 
 var (

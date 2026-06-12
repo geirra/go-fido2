@@ -231,11 +231,13 @@ var (
 	_procGetErrorName    = _webauthnDLL.NewProc("WebAuthNGetErrorName")
 
 	// Window handle helpers – same approach as libfido2/winhello.c.
-	_kernel32          = syscall.NewLazyDLL("kernel32.dll")
-	_user32            = syscall.NewLazyDLL("user32.dll")
-	_procGetConsoleWnd = _kernel32.NewProc("GetConsoleWindow")
-	_procGetForeground = _user32.NewProc("GetForegroundWindow")
-	_procGetDesktop    = _user32.NewProc("GetDesktopWindow")
+	_kernel32              = syscall.NewLazyDLL("kernel32.dll")
+	_user32                = syscall.NewLazyDLL("user32.dll")
+	_procGetConsoleWnd     = _kernel32.NewProc("GetConsoleWindow")
+	_procGetForeground     = _user32.NewProc("GetForegroundWindow")
+	_procGetDesktop        = _user32.NewProc("GetDesktopWindow")
+	_procCreateWindowExW   = _user32.NewProc("CreateWindowExW")
+	_procDestroyWindow     = _user32.NewProc("DestroyWindow")
 )
 
 // resolveHWND returns a suitable parent HWND for webauthn.dll dialogs.
@@ -257,6 +259,30 @@ func resolveHWND(hwnd uintptr) uintptr {
 	return wnd
 }
 
+// createHiddenParentWindow creates a hidden WS_POPUP window to use as the
+// parent HWND for webauthn.dll calls. Some versions of webauthn.dll crash
+// when given a console window handle (STATUS_ACCESS_VIOLATION reading from
+// 0xFFFFFFFFFFFFFFFF); a proper GUI HWND avoids this code path in the DLL.
+// The window is never visible (WS_VISIBLE is not set) and uses the predefined
+// "Static" class so no window class registration is needed.
+// Returns 0 if creation fails; caller falls back to resolveHWND.
+func createHiddenParentWindow() uintptr {
+	className, err := syscall.UTF16PtrFromString("Static")
+	if err != nil {
+		return 0
+	}
+	const wsPopup = 0x80000000
+	hwnd, _, _ := _procCreateWindowExW.Call(
+		0,                                  // dwExStyle
+		uintptr(unsafe.Pointer(className)), // lpClassName = "Static" (predefined)
+		0,                                  // lpWindowName = nil
+		wsPopup,                            // dwStyle = WS_POPUP (no WS_VISIBLE → hidden)
+		0, 0, 0, 0,                         // x, y, width, height
+		0, 0, 0, 0,                         // hWndParent, hMenu, hInstance, lpParam
+	)
+	return hwnd
+}
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -275,23 +301,44 @@ func IsAvailable() bool {
 // platform authenticator via webauthn.dll.  PIN / UV are handled
 // transparently by the OS; callers do not pass a pinUvAuthToken.
 type Client struct {
-	hwnd uintptr // parent HWND; 0 = top-level dialog
-	info *ctap2.AuthenticatorGetInfoResponse
+	hwnd      uintptr // parent HWND passed to webauthn.dll
+	ownedHWND bool    // true when we created hwnd and must destroy it on Close
+	info      *ctap2.AuthenticatorGetInfoResponse
 }
 
 // NewClient creates a new Windows Hello Client.
-// hwnd is the parent window handle; pass 0 to create a top-level dialog.
+// hwnd is the parent window handle; pass 0 to let the library create a
+// suitable hidden WS_POPUP window. Using a real GUI HWND avoids a crash
+// (STATUS_ACCESS_VIOLATION / 0xFFFFFFFFFFFFFFFF) in certain versions of
+// webauthn.dll when called from a console application.
 func NewClient(hwnd uintptr) (*Client, error) {
 	if !IsAvailable() {
 		return nil, ErrNotAvailable
 	}
-	c := &Client{hwnd: hwnd}
+	c := &Client{}
+	if hwnd != 0 {
+		c.hwnd = hwnd
+	} else {
+		// Prefer a hidden WS_POPUP window; fall back to resolveHWND if
+		// window creation fails (e.g. restricted desktop session).
+		if w := createHiddenParentWindow(); w != 0 {
+			c.hwnd = w
+			c.ownedHWND = true
+		}
+		// hwnd=0 → resolveHWND will be called at assertion time as before
+	}
 	c.info = c.buildInfo()
 	return c, nil
 }
 
-// Close is a no-op; there is no persistent connection to close.
-func (c *Client) Close() error { return nil }
+// Close destroys the hidden parent window created by NewClient, if any.
+func (c *Client) Close() error {
+	if c.ownedHWND && c.hwnd != 0 {
+		_procDestroyWindow.Call(c.hwnd)
+		c.hwnd = 0
+	}
+	return nil
+}
 
 // GetInfo returns synthetic CTAP2 authenticator info for Windows Hello.
 func (c *Client) GetInfo() (*ctap2.AuthenticatorGetInfoResponse, error) {
